@@ -11,7 +11,7 @@
     - Removing common bloatware applications
 .NOTES
     Version:        1.1
-    Author:         System Administrator
+    Author:         Frazzled7343
     Creation Date:  2023-11-03
     Last Update:    2025-05-04
     Purpose/Change: Added bloatware removal capability
@@ -100,7 +100,7 @@ foreach ($task in $tasksToDisable) {
         Write-StatusMessage "Could not disable $task - task may not exist on this system" -Type "Warning"
     } catch {
         $errorMessage = $_.Exception.Message
-        Write-StatusMessage "Error disabling $task: $errorMessage" -Type "Warning"
+        Write-StatusMessage "Error disabling ${task}: $errorMessage" -Type "Warning"
     }
 }
 
