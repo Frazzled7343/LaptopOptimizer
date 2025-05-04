@@ -11,7 +11,7 @@
     - Removing common bloatware applications
 .NOTES
     Version:        1.1
-    Author:         Frazzled7343
+    Author:         System Administrator
     Creation Date:  2023-11-03
     Last Update:    2025-05-04
     Purpose/Change: Added bloatware removal capability
@@ -100,7 +100,7 @@ foreach ($task in $tasksToDisable) {
         Write-StatusMessage "Could not disable $task - task may not exist on this system" -Type "Warning"
     } catch {
         $errorMessage = $_.Exception.Message
-        Write-StatusMessage "Error disabling ${task}: $errorMessage" -Type "Warning"
+        Write-StatusMessage "Error disabling $task: $errorMessage" -Type "Warning"
     }
 }
 
@@ -230,6 +230,119 @@ foreach ($app in $bloatwareApps) {
 
 # Apply all power settings changes
 powercfg /setactive SCHEME_BALANCED
+
+# 10. Run DISM and SFC scans to repair Windows system files
+Write-StatusMessage "Running system file integrity checks and repairs..." -Type "Info"
+try {
+    # Run DISM to repair the Windows component store
+    Write-StatusMessage "Running DISM restore health operation (this may take 10-15 minutes)..." -Type "Info"
+    $dismOutput = DISM.exe /Online /Cleanup-Image /RestoreHealth /NoRestart 2>&1
+    
+    if ($LASTEXITCODE -eq 0) {
+        Write-StatusMessage "DISM restore health completed successfully" -Type "Success"
+    } else {
+        Write-StatusMessage "DISM restore health completed with status: $LASTEXITCODE" -Type "Warning"
+    }
+    
+    # Run SFC to check system files
+    Write-StatusMessage "Running System File Checker (this may take 10-15 minutes)..." -Type "Info"
+    $sfcOutput = sfc /scannow 2>&1
+    
+    if ($sfcOutput -match "did not find any integrity violations") {
+        Write-StatusMessage "SFC did not find any integrity violations" -Type "Success"
+    } elseif ($sfcOutput -match "found corrupt files and successfully repaired them") {
+        Write-StatusMessage "SFC found and repaired corrupt files" -Type "Success"
+    } else {
+        Write-StatusMessage "SFC completed, but may require further investigation" -Type "Warning"
+    }
+} catch {
+    $errorMessage = $_.Exception.Message
+    Write-StatusMessage "Error during system file checks: $errorMessage" -Type "Error"
+}
+
+# 11. Disable telemetry and data collection
+Write-StatusMessage "Disabling telemetry and data collection..." -Type "Info"
+try {
+    # Disable telemetry
+    $regTelemetryPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection"
+    If (-Not (Test-Path $regTelemetryPath)) {
+        New-Item -Path $regTelemetryPath -Force | Out-Null
+    }
+    Set-ItemProperty -Path $regTelemetryPath -Name "AllowTelemetry" -Type DWord -Value 0 -ErrorAction Stop
+
+    # Disable app telemetry
+    $regAppTelemetryPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\AppCompat"
+    If (-Not (Test-Path $regAppTelemetryPath)) {
+        New-Item -Path $regAppTelemetryPath -Force | Out-Null
+    }
+    Set-ItemProperty -Path $regAppTelemetryPath -Name "AITEnable" -Type DWord -Value 0 -ErrorAction Stop
+
+    # Disable feedback
+    $regFeedbackPath = "HKCU:\Software\Microsoft\Siuf\Rules"
+    If (-Not (Test-Path $regFeedbackPath)) {
+        New-Item -Path $regFeedbackPath -Force | Out-Null
+    }
+    Set-ItemProperty -Path $regFeedbackPath -Name "NumberOfSIUFInPeriod" -Type DWord -Value 0 -ErrorAction Stop
+
+    Write-StatusMessage "Telemetry and data collection settings disabled" -Type "Success"
+} catch {
+    $errorMessage = $_.Exception.Message
+    Write-StatusMessage "Failed to disable telemetry and data collection: $errorMessage" -Type "Warning"
+}
+# 12. Optimize network settings
+Write-StatusMessage "Optimizing network settings for better performance..." -Type "Info"
+try {
+    # Enable all network adapters
+    Get-NetAdapter | Where-Object { $_.Status -eq "Disabled" } | Enable-NetAdapter
+
+    # Disable NetBIOS over TCP/IP (security and performance)
+    $adapters = Get-WmiObject Win32_NetworkAdapterConfiguration | Where-Object { $_.IPEnabled -eq $true }
+    foreach ($adapter in $adapters) {
+        $adapter.SetTcpipNetbios(2) | Out-Null
+    }
+
+    # Disable IPv6 (if not needed)
+    $adapters = Get-NetAdapterBinding -ComponentID 'ms_tcpip6'
+    foreach ($adapter in $adapters) {
+        Disable-NetAdapterBinding -Name $adapter.Name -ComponentID 'ms_tcpip6'
+    }
+
+    # Disable QoS Packet Scheduler (potentially improve bandwidth)
+    $adapters = Get-NetAdapterBinding -ComponentID 'ms_pacer'
+    foreach ($adapter in $adapters) {
+        Disable-NetAdapterBinding -Name $adapter.Name -ComponentID 'ms_pacer'
+    }
+
+    Write-StatusMessage "Network settings optimized successfully" -Type "Success"
+} catch {
+    $errorMessage = $_.Exception.Message
+    Write-StatusMessage "Failed to optimize network settings: $errorMessage" -Type "Warning"
+}
+# 13. Clear temporary files to free up disk space
+Write-StatusMessage "Clearing temporary files to free up disk space..." -Type "Info"
+try {
+    # Clear temp folders
+    Remove-Item -Path "$env:TEMP\*" -Force -Recurse -ErrorAction SilentlyContinue
+    Remove-Item -Path "C:\Windows\Temp\*" -Force -Recurse -ErrorAction SilentlyContinue
+
+    # Clear Windows update cache
+    Stop-Service -Name wuauserv -Force
+    Remove-Item -Path "C:\Windows\SoftwareDistribution\*" -Force -Recurse -ErrorAction SilentlyContinue
+    Start-Service -Name wuauserv
+
+    # Clear thumbnails cache
+    Remove-Item -Path "$env:LOCALAPPDATA\Microsoft\Windows\Explorer\thumbcache_*.db" -Force -ErrorAction SilentlyContinue
+
+    # Run Disk Cleanup (cleanmgr) silently with all options
+    cleanmgr /sagerun:1 /VeryLowDisk
+
+    Write-StatusMessage "Temporary files cleaned up successfully" -Type "Success"
+} catch {
+    $errorMessage = $_.Exception.Message
+    Write-StatusMessage "Failed to clean up some temporary files: $errorMessage" -Type "Warning"
+}
+
+
 
 Write-StatusMessage "Laptop optimization complete! A system restart is recommended to apply all changes." -Type "Success"
 Write-StatusMessage "Note: Some settings may be overridden by your IT department if this is a managed device." -Type "Info"
