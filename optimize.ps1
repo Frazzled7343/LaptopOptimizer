@@ -11,7 +11,7 @@
     - Removing common bloatware applications
 .NOTES
     Version:        1.1
-    Author:         Frazzler7343
+    Author:         Frazzled7343
     Creation Date:  2023-11-03
     Last Update:    2025-05-04
     Purpose/Change: Added bloatware removal capability
