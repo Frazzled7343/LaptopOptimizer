@@ -13,10 +13,11 @@ Requires **Administrator access**.
 ---
 
 ### What it does:
-- Disables background apps
-- Applies smart power-saving CPU settings
-- Disables noisy scheduled tasks
-- Optimizes Windows visual effects
-
+Optimizes Windows laptops for better performance, battery life, and reduced heat by:
+- Disabling unnecessary background apps
+- Configuring power settings for balanced performance and power savings
+- Disabling resource-intensive scheduled tasks
+- Optimizing visual effects for performance
+- Removing common bloatware applications
 
 Thanks for looking!
